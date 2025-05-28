@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrypto Chat - Chat with {{ username }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            overflow: hidden;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .neon-input, .neon-select, .neon-file {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            transition: all 0.3s ease;
+        }
+        .neon-input:focus, .neon-select:focus, .neon-file:focus {
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+            border-color: #3b82f6;
+        }
+        .neon-button {
+            position: relative;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+            transition: all 0.3s ease;
+        }
+        .neon-button:hover {
+            transform: translateY(-3px) scale(1.03);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+        }
+        .neon-button::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 25%;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid currentColor;
+            transform: rotate(180deg);
+        }
+        .glow-text {
+            animation: glow 2s ease-in-out infinite;
+        }
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 4px #3b82f6, 0 0 8px #3b82f6; }
+            50% { text-shadow: 0 0 8px #3b82f6, 0 0 16px #3b82f6; }
+        }
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(59, 130, 246, 0.6);
+            border-radius: 50%;
+            animation: float 15s infinite linear;
+            pointer-events: none;
+        }
+        @keyframes float {
+            0% { transform: translateY(100vh) translateX(0); }
+            100% { transform: translateY(-100vh) translateX(15px); }
+        }
+        .particle:nth-child(odd) { animation-duration: 10s; }
+        .particle:nth-child(even) { animation-duration: 20s; }
+        #messages {
+            height: 250px;
+            overflow-y: auto;
+            padding: 8px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+        }
+        .message {
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            border-radius: 10px;
+            position: relative;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+        .message.encrypted {
+            background: rgba(59, 130, 246, 0.2);
+            color: #a0aec0;
+            font-style: italic;
+            margin-left: auto;
+            border: 1px solid rgba(59, 130, 246, 0.5);
+        }
+        .message.decrypted {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            margin-right: auto;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .message strong {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+        .form-container {
+            position: relative;
+            padding: 6px 0;
+            margin-bottom: 8px;
+        }
+        .form-container::before, .form-container::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1.5px;
+            background: linear-gradient(to right, transparent, #3b82f6, transparent);
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+        }
+        .form-container::before {
+            top: 0;
+        }
+        .form-container::after {
+            bottom: 0;
+        }
+        .file-link:hover {
+            text-decoration: underline;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body class="h-screen flex items-center justify-center relative">
+    <!-- Particle Background -->
+    <div class="particle" style="left: 10%;"></div>
+    <div class="particle" style="left: 20%;"></div>
+    <div class="particle" style="left: 30%;"></div>
+    <div class="particle" style="left: 70%;"></div>
+    <div class="particle" style="left: 80%;"></div>
+    <div class="particle" style="left: 90%;"></div>
+
+    <div class="glass-card p-4 rounded-2xl shadow-xl w-full max-w-md transform transition-all hover:scale-105">
+        <h1 class="text-2xl font-bold text-center text-white mb-3 glow-text" style="font-family: 'Orbitron', sans-serif;">
+            Chat with {{ username }}
+        </h1>
+        {% if error %}
+            <div class="bg-red-500/20 border border-red-500 text-red-200 px-3 py-1 rounded-lg mb-3 text-center text-sm">
+                {{ error }}
+            </div>
+        {% endif %}
+        <div class="mb-2 flex items-center">
+            <label for="cipher" class="text-gray-300 text-xs font-semibold mr-2" style="font-family: 'Orbitron', sans-serif;">Cipher:</label>
+            <select id="cipher" class="neon-select px-2 py-1 text-white rounded-lg w-24 text-sm">
+                <option value="AES">AES</option>
+                <option value="RSA">RSA</option>
+            </select>
+            <button onclick="switchCipher()" class="neon-button bg-blue-600 text-white px-2 py-1 rounded-lg font-semibold hover:bg-blue-500 ml-2 text-sm" style="font-family: 'Orbitron', sans-serif;">Switch</button>
+        </div>
+        <div id="messages">
+            {% for message in messages %}
+                <div class="message {{ 'encrypted' if message.is_encrypted else 'decrypted' }}">
+                    <strong>{{ message.sender }}</strong> ({{ message.cipher }}) [{{ message.timestamp }}]:
+                    {% if message.is_file %}
+                        {% if message.is_encrypted %}
+                            Encrypted file: {{ message.file_name }}
+                        {% else %}
+                            <a href="{{ url_for('download_file', message_id=message.message_id) }}" class="file-link text-blue-400">{{ message.file_name }}</a>
+                        {% endif %}
+                    {% else %}
+                        {{ message.message }}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="form-container">
+            <form id="message-form">
+                <div class="flex items-center space-x-2">
+                    <input type="text" class="neon-input w-full px-2 py-1 text-white rounded-lg text-sm" id="message" placeholder="Type a message..." required>
+                    <button type="submit" class="neon-button bg-blue-600 text-white px-2 py-1 rounded-lg font-semibold hover:bg-blue-500 text-sm" style="font-family: 'Orbitron', sans-serif;">Send</button>
+                </div>
+            </form>
+            <form id="file-form" enctype="multipart/form-data" class="mt-2">
+                <div class="flex items-center space-x-2">
+                    <input type="file" class="neon-file w-full px-2 py-1 text-white rounded-lg text-sm" id="file-input">
+                    <button type="submit" class="neon-button bg-green-600 text-white px-2 py-1 rounded-lg font-semibold hover:bg-green-500 text-sm" style="font-family: 'Orbitron', sans-serif;">Upload</button>
+                </div>
+            </form>
+        </div>
+        <div class="flex flex-col items-center space-y-2">
+            <button onclick="deleteChatHistory()" class="neon-button bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-500 w-full text-sm" style="font-family: 'Orbitron', sans-serif;">Delete Chat History</button>
+            <a href="/dashboard" class="neon-button bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-500 w-full text-center text-sm" style="font-family: 'Orbitron', sans-serif;">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const receiver = "{{ username }}";
+        const receiverId = "{{ receiver_id }}";
+        const senderId = "{{ session['user_id'] }}";
+        const senderUsername = "{{ session['username'] }}";
+
+        socket.on('connect', () => {
+            socket.emit('join', { user_id: senderId });
+            console.log('Connected to server');
+        });
+
+        socket.on('message', (data) => {
+            console.log('Received message:', data);
+            const messages = document.getElementById('messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${data.is_encrypted ? 'encrypted' : 'decrypted'}`;
+            let content = `<strong>${data.sender}</strong> (${data.cipher}) [${data.timestamp}]: `;
+            
+            if (data.is_file) {
+                if (data.is_encrypted) {
+                    content += `Encrypted file: ${data.file_name}`;
+                } else {
+                    content += `<a href="/download/${data.message_id}" class="file-link text-blue-400">${data.file_name}</a>`;
+                }
+            } else {
+                content += data.message;
+            }
+            
+            msgDiv.innerHTML = content;
+            messages.appendChild(msgDiv);
+            messages.scrollTop = messages.scrollHeight;
+        });
+
+        socket.on('cipher_switched', (data) => {
+            console.log('Cipher switched to:', data.cipher);
+            document.getElementById('cipher').value = data.cipher;
+            alert(`Cipher switched to ${data.cipher}`);
+        });
+
+        socket.on('chat_deleted', () => {
+            console.log('Chat history deleted');
+            document.getElementById('messages').innerHTML = '';
+            alert('Chat history has been deleted.');
+        });
+
+        document.getElementById('message-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const messageInput = document.getElementById('message');
+            const message = messageInput.value.trim();
+            const cipher = document.getElementById('cipher').value;
+            if (message) {
+                console.log('Sending message:', { receiver, message, cipher });
+                socket.emit('message', { 
+                    receiver: receiver, 
+                    message: message, 
+                    cipher: cipher 
+                });
+                messageInput.value = '';
+            }
+        });
+
+        document.getElementById('file-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                fetch(`/chat/${receiver}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        console.log('File uploaded successfully');
+                        fileInput.value = '';
+                        alert('File uploaded successfully!');
+                    } else {
+                        throw new Error(data.error || 'File upload failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error uploading file:', error);
+                    alert('Error uploading file: ' + error.message);
+                });
+            } else {
+                alert('Please select a file to upload.');
+            }
+        });
+
+        function switchCipher() {
+            const cipher = document.getElementById('cipher').value;
+            console.log('Switching cipher to:', cipher);
+            socket.emit('switch_cipher', { cipher });
+        }
+
+        function deleteChatHistory() {
+            if (confirm('Are you sure you want to delete the chat history? This cannot be undone.')) {
+                fetch('/delete_chat/' + receiver, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Chat history deleted successfully.');
+                        socket.emit('delete_chat', { receiver: receiver });
+                    } else {
+                        alert('Error deleting chat history: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error deleting chat history.');
+                });
+            }
+        }
+    </script>
+</body>
+</html>
