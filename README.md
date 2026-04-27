@@ -10,6 +10,7 @@ Designed a responsive web interface for creating/joining chat rooms and exchangi
 Engineered a multithreaded server handling multiple concurrent connections reliably.
  
 Ensured zero server knowledge — the relay server cannot read message content.
+
 Tech Stack: Python, WebSockets, AES-256/RSA Encryption, HTML/CSS, TCP/IP
 
 
